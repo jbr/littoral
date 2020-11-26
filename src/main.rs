@@ -133,9 +133,9 @@ async fn main() -> Result<(), std::io::Error> {
                 Ok(())
             },
         ))
-        .get(|_| async { Ok(Body::from_file("./static/build/index.html").await?) });
+        .get(|_| async { Ok(Body::from_file("./client/build/index.html").await?) });
 
-    app.at("/").serve_dir("./static/build")?;
+    app.at("/").serve_dir("./client/build")?;
 
     app.listen("127.0.0.1:8080").await?;
 

@@ -1,0 +1,32 @@
+[package]
+name = "littoral"
+version = "0.1.0"
+authors = ["Jacob Rothstein <hi@jbr.me>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+tide = "0.15.0"
+futures-util = "0.3.8"
+env_logger = "0.8.2"
+broadcaster = "1.0.0"
+petname = "1.0.12"
+async-dup = "1.2.2"
+
+[dependencies.async-std]
+version = "1.7.0"
+features = ["attributes"]
+
+[dependencies.tide-websockets]
+git = "https://github.com/http-rs/tide-websockets"
+branch = "main"
+
+#path = "../tide-websockets"
+[patch.crates-io.http-types]
+git = "https://github.com/http-rs/http-types"
+features = ["unstable"]
+branch = "new-connection"
+
+[patch.crates-io.async-h1]
+git = "https://github.com/jbr/async-h1"
+branch = "upgrades"

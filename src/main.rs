@@ -1,30 +1,74 @@
-use std::time::Duration;
-
+use async_std::sync::{Arc, RwLock};
 use broadcaster::BroadcastChannel;
 use futures_util::future::Either;
 use futures_util::StreamExt;
+use serde_derive::Serialize;
+use serde_json::json;
 use tide::http::format_err;
 use tide::Body;
+use tide::Request;
+use tide_websockets::async_tungstenite::tungstenite::Message as WSMessage;
 use tide_websockets::WebsocketMiddleware;
 
-#[derive(Clone, Debug)]
-struct ChatMessage {
-    user: String,
-    message: String,
+#[derive(Clone, Debug, Serialize)]
+enum Message {
+    Chat { user: String, message: String },
+    Userlist(Vec<String>),
 }
 
 #[derive(Clone, Debug)]
 struct State {
-    broadcaster: BroadcastChannel<ChatMessage>,
+    broadcaster: BroadcastChannel<Message>,
+    users: Arc<RwLock<Vec<String>>>,
 }
 
 impl State {
     fn new() -> Self {
         Self {
             broadcaster: BroadcastChannel::new(),
+            users: Arc::new(RwLock::new(vec![])),
         }
     }
+
+    async fn add_user(&self, user: String) -> tide::Result<()> {
+        self.users.write().await.push(user.clone());
+        self.send_chat(
+            String::from("system"),
+            format!("{} has entered the chat", user),
+        )
+        .await?;
+        self.send_userlist().await
+    }
+
+    async fn send_message(&self, message: Message) -> tide::Result<()> {
+        self.broadcaster.send(&message).await?;
+        Ok(())
+    }
+
+    async fn send_chat(&self, user: String, message: String) -> tide::Result<()> {
+        self.send_message(Message::Chat { user, message }).await
+    }
+
+    async fn send_userlist(&self) -> tide::Result<()> {
+        self.send_message(Message::Userlist(self.users.read().await.clone()))
+            .await
+    }
+
+    async fn remove_user(&self, user: String) -> tide::Result<()> {
+        self.users.write().await.retain(|u| u != &user);
+        self.send_chat(String::from("system"), format!("{} left the chat", user))
+            .await?;
+        self.send_userlist().await
+    }
 }
+
+// struct DropGuard(String, State);
+// impl Drop for DropGuard {
+//     fn drop(&mut self) {
+//         dbg!("dropping");
+//         async_std::task::block_on(self.1.remove_user(self.0.clone())).ok();
+//     }
+// }
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
@@ -37,62 +81,63 @@ async fn main() -> Result<(), std::io::Error> {
 
     let mut state = app.state().clone();
     async_std::task::spawn(async move {
-        while let Some(ChatMessage { user, message }) = state.broadcaster.next().await {
-            println!("{}: {}", user, message);
+        while let Some(message) = state.broadcaster.next().await {
+            match message {
+                Message::Chat { user, message } => println!("{}: {}", user, message),
+                Message::Userlist(userlist) => println!("{:?}", userlist),
+            };
         }
+        tide::Result::Ok(())
     });
 
     app.at("/")
-        .with(WebsocketMiddleware::new(|request, wsc| async move {
-            let petnames = petname::Petnames::default();
-            let current_user = petnames.generate_one(2, ".");
-            let State { broadcaster } = request.state();
-            let broadcaster = broadcaster.clone();
+        .with(WebsocketMiddleware::new(
+            |request: Request<State>, wsc| async move {
+                let petnames = petname::Petnames::default();
+                let current_user = petnames.generate_one(2, ".");
+                let state = request.state().clone();
+                let broadcaster = state.broadcaster.clone();
 
-            let mut combined_stream = futures_util::stream::select(
-                wsc.clone().map(|l| Either::Left(l)),
-                broadcaster.clone().map(|r| Either::Right(r)),
-            );
+                let mut combined_stream = futures_util::stream::select(
+                    wsc.clone().map(|l| Either::Left(l)),
+                    broadcaster.clone().map(|r| Either::Right(r)),
+                );
 
-            let message = format!("{} has entered the room", current_user.clone());
-            let cloned_broadcaster = broadcaster.clone();
-            async_std::task::spawn(async move {
-                async_std::task::sleep(Duration::from_millis(1)).await;
-                cloned_broadcaster
-                    .send(&ChatMessage {
-                        user: String::from("system"),
-                        message,
-                    })
-                    .await
-            });
+                state.add_user(current_user.clone()).await?;
+                //                let _drop = DropGuard(current_user.clone(), state.clone());
 
-            while let Some(item) = combined_stream.next().await {
-                match item {
-                    Either::Left(Ok(message)) => {
-                        broadcaster
-                            .clone()
-                            .send(&ChatMessage {
-                                user: current_user.clone(),
-                                message: message.into_text()?,
-                            })
+                while let Some(item) = combined_stream.next().await {
+                    match item {
+                        Either::Left(Ok(WSMessage::Text(message))) => {
+                            state.send_chat(current_user.clone(), message).await?;
+                        }
+
+                        Either::Right(Message::Chat { user, message }) => {
+                            wsc.send_json(
+                                &json!({ "type": "message", "user": user, "message": message }),
+                            )
                             .await?;
-                    }
+                        }
 
-                    Either::Right(ChatMessage { user, message }) => {
-                        wsc.send_string(format!("{}: {}", user, message)).await?;
-                    }
+                        Either::Right(Message::Userlist(userlist)) => {
+                            wsc.send_json(&json!({ "type": "userlist", "users": userlist }))
+                                .await?;
+                        }
 
-                    o => {
-                        dbg!(o);
-                        return Err(format_err!("no idea"));
+                        o => {
+                            state.remove_user(current_user.clone()).await?;
+                            log::debug!("{:?}", o);
+                            return Err(format_err!("no idea"));
+                        }
                     }
                 }
-            }
 
-            Ok(())
-        }))
-        .get(|_| async { Ok(Body::from_file("./static/build/index.html").await?) })
-        .serve_dir("./static/build")?;
+                Ok(())
+            },
+        ))
+        .get(|_| async { Ok(Body::from_file("./static/build/index.html").await?) });
+
+    app.at("/").serve_dir("./static/build")?;
 
     app.listen("127.0.0.1:8080").await?;
 

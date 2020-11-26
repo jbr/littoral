@@ -993,7 +993,11 @@ dependencies = [
  "broadcaster",
  "env_logger",
  "futures-util",
+ "log",
  "petname",
+ "serde",
+ "serde_derive",
+ "serde_json",
  "tide",
  "tide-websockets",
 ]
@@ -1598,7 +1602,6 @@ dependencies = [
 [[package]]
 name = "tide-websockets"
 version = "0.1.0"
-source = "git+https://github.com/http-rs/tide-websockets?branch=main#6546d166963c78fa4ca493de9b9591c284c877fa"
 dependencies = [
  "async-dup",
  "async-std",
@@ -1607,6 +1610,8 @@ dependencies = [
  "env_logger",
  "futures-util",
  "pin-project",
+ "serde",
+ "serde_json",
  "sha-1",
  "tide",
 ]

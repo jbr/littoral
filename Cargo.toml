@@ -12,16 +12,20 @@ env_logger = "0.8.2"
 broadcaster = "1.0.0"
 petname = "1.0.12"
 async-dup = "1.2.2"
+log = "0.4.11"
+serde_json = "1.0.59"
+serde = "1.0.117"
+serde_derive = "1.0.117"
 
 [dependencies.async-std]
 version = "1.7.0"
 features = ["attributes"]
 
 [dependencies.tide-websockets]
-git = "https://github.com/http-rs/tide-websockets"
-branch = "main"
+# git = "https://github.com/http-rs/tide-websockets"
+# branch = "main"
+path = "../tide-websockets"
 
-#path = "../tide-websockets"
 [patch.crates-io.http-types]
 git = "https://github.com/http-rs/http-types"
 features = ["unstable"]

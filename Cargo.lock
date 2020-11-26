@@ -789,6 +789,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gh-emoji"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a17a050b7eb420553344e1cf1db648e8b584c79e98b74e6e6d119eeedd9ddcbc"
+dependencies = [
+ "phf",
+ "regex",
+]
+
+[[package]]
 name = "ghash"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -993,6 +1003,7 @@ dependencies = [
  "broadcaster",
  "env_logger",
  "futures-util",
+ "gh-emoji",
  "log",
  "petname",
  "serde",
@@ -1134,6 +1145,24 @@ dependencies = [
  "clap",
  "itertools",
  "rand",
+]
+
+[[package]]
+name = "phf"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dfb61232e34fcb633f43d12c58f83c1df82962dcdfa565a4e866ffc17dafe12"
+dependencies = [
+ "phf_shared",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c00cf8b9eafe68dde5e9eaa2cef8ee84a9336a47d566ec55ca16589633b65af7"
+dependencies = [
+ "siphasher",
 ]
 
 [[package]]
@@ -1429,6 +1458,12 @@ checksum = "38aabbeafa6f6dead8cebf246fe9fae1f9215c8d29b3a69f93bd62a9e4a3dcd6"
 dependencies = [
  "event-listener",
 ]
+
+[[package]]
+name = "siphasher"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa8f3741c7372e75519bd9346068370c9cdaabcc1f9599cbcf2a2719352286b7"
 
 [[package]]
 name = "slab"

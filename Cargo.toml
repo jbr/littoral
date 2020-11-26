@@ -16,6 +16,7 @@ log = "0.4.11"
 serde_json = "1.0.59"
 serde = "1.0.117"
 serde_derive = "1.0.117"
+gh-emoji = "1.0.3"
 
 [dependencies.async-std]
 version = "1.7.0"

@@ -2,6 +2,7 @@ use async_std::sync::{Arc, RwLock};
 use broadcaster::BroadcastChannel;
 use futures_util::future::Either;
 use futures_util::StreamExt;
+use gh_emoji::Replacer;
 use serde_derive::Serialize;
 use serde_json::json;
 use tide::http::format_err;
@@ -62,14 +63,6 @@ impl State {
     }
 }
 
-// struct DropGuard(String, State);
-// impl Drop for DropGuard {
-//     fn drop(&mut self) {
-//         dbg!("dropping");
-//         async_std::task::block_on(self.1.remove_user(self.0.clone())).ok();
-//     }
-// }
-
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
     env_logger::init();
@@ -104,12 +97,17 @@ async fn main() -> Result<(), std::io::Error> {
                 );
 
                 state.add_user(current_user.clone()).await?;
-                //                let _drop = DropGuard(current_user.clone(), state.clone());
+                let replacer = Replacer::new();
 
                 while let Some(item) = combined_stream.next().await {
                     match item {
                         Either::Left(Ok(WSMessage::Text(message))) => {
-                            state.send_chat(current_user.clone(), message).await?;
+                            state
+                                .send_chat(
+                                    current_user.clone(),
+                                    replacer.replace_all(&message).into(),
+                                )
+                                .await?;
                         }
 
                         Either::Right(Message::Chat { user, message }) => {

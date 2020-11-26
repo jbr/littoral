@@ -51,11 +51,17 @@ function App() {
     [setValue]
   );
 
+  const messagesEndRef = React.useRef<HTMLLIElement>(null);
+
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [history]);
+
   return (
     <div className="App container">
       <div className="row">
         <div className="col">
-          <ul className="list-group list-group-flush">
+          <ul className="messages list-group list-group-flush">
             {history.map((message, i) =>
               message.user === "system" ? (
                 <li
@@ -71,6 +77,7 @@ function App() {
                   </li>
                 )
             )}
+            <li ref={messagesEndRef}></li>
           </ul>
           <input
             type="text"

@@ -23,14 +23,12 @@ version = "1.7.0"
 features = ["attributes"]
 
 [dependencies.tide-websockets]
-# git = "https://github.com/http-rs/tide-websockets"
-# branch = "main"
-path = "../tide-websockets"
+git = "https://github.com/http-rs/tide-websockets"
+branch = "main"
 
 [patch.crates-io.http-types]
 git = "https://github.com/http-rs/http-types"
-features = ["unstable"]
-branch = "new-connection"
+branch = "stabilize-upgrade"
 
 [patch.crates-io.async-h1]
 git = "https://github.com/jbr/async-h1"

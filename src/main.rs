@@ -3,13 +3,12 @@ use broadcaster::BroadcastChannel;
 use futures_util::future::Either;
 use futures_util::StreamExt;
 use gh_emoji::Replacer;
+use petname::Petnames;
 use serde_derive::Serialize;
 use serde_json::json;
 use tide::http::format_err;
-use tide::Body;
-use tide::Request;
-use tide_websockets::async_tungstenite::tungstenite::Message as WSMessage;
-use tide_websockets::WebsocketMiddleware;
+use tide::{Body, Request};
+use tide_websockets::{Message as WSMessage, WebSocket};
 
 #[derive(Clone, Debug, Serialize)]
 enum Message {
@@ -21,6 +20,7 @@ enum Message {
 struct State {
     broadcaster: BroadcastChannel<Message>,
     users: Arc<RwLock<Vec<String>>>,
+    petnames: Petnames<'static>,
 }
 
 impl State {
@@ -28,6 +28,7 @@ impl State {
         Self {
             broadcaster: BroadcastChannel::new(),
             users: Arc::new(RwLock::new(vec![])),
+            petnames: Petnames::default(),
         }
     }
 
@@ -61,6 +62,10 @@ impl State {
             .await?;
         self.send_userlist().await
     }
+
+    fn current_user(&self) -> String {
+        self.petnames.generate_one(2, ".")
+    }
 }
 
 #[async_std::main]
@@ -84,55 +89,49 @@ async fn main() -> Result<(), std::io::Error> {
     });
 
     app.at("/")
-        .with(WebsocketMiddleware::new(
-            |request: Request<State>, wsc| async move {
-                let petnames = petname::Petnames::default();
-                let current_user = petnames.generate_one(2, ".");
-                let state = request.state().clone();
-                let broadcaster = state.broadcaster.clone();
+        .with(WebSocket::new(|request: Request<State>, wsc| async move {
+            let state = request.state().clone();
+            let current_user = request.state().current_user();
+            let broadcaster = state.broadcaster.clone();
 
-                let mut combined_stream = futures_util::stream::select(
-                    wsc.clone().map(|l| Either::Left(l)),
-                    broadcaster.clone().map(|r| Either::Right(r)),
-                );
+            let mut combined_stream = futures_util::stream::select(
+                wsc.clone().map(|l| Either::Left(l)),
+                broadcaster.clone().map(|r| Either::Right(r)),
+            );
 
-                state.add_user(current_user.clone()).await?;
-                let replacer = Replacer::new();
+            state.add_user(current_user.clone()).await?;
+            let replacer = Replacer::new();
 
-                while let Some(item) = combined_stream.next().await {
-                    match item {
-                        Either::Left(Ok(WSMessage::Text(message))) => {
-                            state
-                                .send_chat(
-                                    current_user.clone(),
-                                    replacer.replace_all(&message).into(),
-                                )
-                                .await?;
-                        }
-
-                        Either::Right(Message::Chat { user, message }) => {
-                            wsc.send_json(
-                                &json!({ "type": "message", "user": user, "message": message }),
-                            )
+            while let Some(item) = combined_stream.next().await {
+                match item {
+                    Either::Left(Ok(WSMessage::Text(message))) => {
+                        state
+                            .send_chat(current_user.clone(), replacer.replace_all(&message).into())
                             .await?;
-                        }
+                    }
 
-                        Either::Right(Message::Userlist(userlist)) => {
-                            wsc.send_json(&json!({ "type": "userlist", "users": userlist }))
-                                .await?;
-                        }
+                    Either::Right(Message::Chat { user, message }) => {
+                        wsc.send_json(
+                            &json!({ "type": "message", "user": user, "message": message }),
+                        )
+                        .await?;
+                    }
 
-                        o => {
-                            state.remove_user(current_user.clone()).await?;
-                            log::debug!("{:?}", o);
-                            return Err(format_err!("no idea"));
-                        }
+                    Either::Right(Message::Userlist(userlist)) => {
+                        wsc.send_json(&json!({ "type": "userlist", "users": userlist }))
+                            .await?;
+                    }
+
+                    o => {
+                        state.remove_user(current_user.clone()).await?;
+                        log::debug!("{:?}", o);
+                        return Err(format_err!("no idea"));
                     }
                 }
+            }
 
-                Ok(())
-            },
-        ))
+            Ok(())
+        }))
         .get(|_| async { Ok(Body::from_file("./client/build/index.html").await?) });
 
     app.at("/").serve_dir("./client/build")?;
